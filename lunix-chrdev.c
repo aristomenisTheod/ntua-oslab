@@ -32,7 +32,7 @@
 
 #define current (current_thread_info()->task) /* get pid of current process */
 
-struct cdev lunix_chrdev_cdev;
+struct state lunix_chrdev_state;
 
 /*
  * Just a quick [unlocked] check to see if the cached
@@ -43,8 +43,7 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 	struct lunix_sensor_struct *sensor;
 	
 	WARN_ON ( !(sensor = state->sensor));
-	/* ? */
-	
+
 	/* The following return is bogus, just for the stub to compile */
 	return !((sensor->msr_data[state->type]).last_update==state->buf_timestamp);
 }
@@ -60,12 +59,17 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	
 	debug("leaving\n");
 
+	sensor=state->sensor;
 	/*
 	 * Grab the raw data quickly, hold the
 	 * spinlock for as little as possible.
 	 */
 	/* ? */
-	/* Why use spinlocks? See LDD3, p. 119 */
+	down(state->lock);
+
+	lunix_protocol
+
+	up(state->lock);
 
 	/*
 	 * Any new data available?
@@ -90,10 +94,8 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 
 static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 {
-	/* Declarations */
-	/* ? */
 	struct lunix_chrev_state_struct *state;
-	int ret;
+	int ret,minor,major;
 
 	debug("entering\n");
 	ret = -ENODEV;
@@ -104,12 +106,16 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	 * Associate this open file with the relevant sensor based on
 	 * the minor number of the device node [/dev/sensor<NO>-<TYPE>]
 	 */
+	state=container_of(inode->i_cdev,struct state,cdev);
+	filp->private_data=state;
 	
 	/* Allocate a new Lunix character device private state structure */
-	/* ? */
-	state->type=iminor(inode);
-	if (filp=>private_data==0)	/*first open*/
-		state->buf_timestamp=0;
+	minor=iminor(inode);
+	major=imajor(inode);
+	filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8];
+	filp->private_data->type=minor;
+	if (filp->private_data==Null)	/*first open*/
+		filp->private_data->buf_timestamp=0;
 out:
 	debug("leaving, with ret = %d\n", ret);
 	return ret;
@@ -117,7 +123,8 @@ out:
 
 static int lunix_chrdev_release(struct inode *inode, struct file *filp)
 {
-	/* ? */
+	kfree(state);
+	kfree(ret);
 	return 0;
 }
 
@@ -204,8 +211,8 @@ int lunix_chrdev_init(void)
 	
 	spin_lock_init(lock);
 	debug("initializing character device\n");
-	cdev_init(&lunix_chrdev_cdev, &lunix_chrdev_fops);
-	lunix_chrdev_cdev.owner = THIS_MODULE;
+	cdev_init(&(lunix_chrdev_state->lunix_chrdev_cdev), &lunix_chrdev_fops);
+	lunix_chrdev_state->lunix_chrdev_cdev.owner = THIS_MODULE;
 	
 	dev_no = MKDEV(LUNIX_CHRDEV_MAJOR, 0);
 	/* register_chrdev_region? */
@@ -215,7 +222,7 @@ int lunix_chrdev_init(void)
 		goto out;
 	}	
 	/* cdev_add? */
-	ret=cdev_add(lunix_chrdev_cdev,dev_no,lunix_minor_cnt);
+	ret=cdev_add(lunix_chrdev_state->lunix_chrdev_cdev,dev_no,lunix_minor_cnt);
 	if (ret < 0) {
 		debug("failed to add character device\n");
 		goto out_with_chrdev_region;
