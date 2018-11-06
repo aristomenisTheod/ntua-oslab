@@ -102,20 +102,19 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	if ((ret = nonseekable_open(inode, filp)) < 0)
 		goto out;
 
-	/*
-	 * Associate this open file with the relevant sensor based on
-	 * the minor number of the device node [/dev/sensor<NO>-<TYPE>]
-	 */
-	state=container_of(inode->i_cdev,struct state,cdev);
-	filp->private_data=state;
+	// state=container_of(inode->i_cdev,struct state,cdev);
+	// filp->private_data=state;
 	
-	/* Allocate a new Lunix character device private state structure */
 	minor=iminor(inode);
 	major=imajor(inode);
-	filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8];
-	filp->private_data->type=minor;
-	if (filp->private_data==Null)	/*first open*/
-		filp->private_data->buf_timestamp=0;
+	// filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8];
+	// filp->private_data->type=minor;
+	
+	state=kmalloc(sizeof(lunix_chrev_state_struct),GFP_KERNEL);
+	filp->private_data=state;
+	filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8]
+	filp->private_data->buf_timestamp=0
+
 out:
 	debug("leaving, with ret = %d\n", ret);
 	return ret;
@@ -124,7 +123,6 @@ out:
 static int lunix_chrdev_release(struct inode *inode, struct file *filp)
 {
 	kfree(state);
-	kfree(ret);
 	return 0;
 }
 
@@ -156,15 +154,12 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	 * on a "fresh" measurement, do so
 	 */
 
-	if (lunix_chrdev_state_needs_refresh(state)){
-		if (*f_pos == 0) {
-			while (lunix_chrdev_state_update(state) == -EAGAIN) {
+	if (*f_pos == 0) {
+		while (lunix_chrdev_state_update(state) == -EAGAIN) {
 				/* ? */
 				/* The process needs to sleep */
 				/* See LDD3, page 153 for a hint */
-				interuptible_sleep_on(sensor->wq); /* sends current proc to sleep */
-
-			}
+			interuptible_sleep_on(sensor->wq); /* sends current proc to sleep */
 		}
 	}
 
