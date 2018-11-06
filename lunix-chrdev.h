@@ -39,8 +39,7 @@ struct lunix_chrdev_state_struct {
 	uint32_t buf_timestamp;
 
 	struct semaphore lock;
-
-	struct cdev lunix_chrdev_cdev;
+			
 	/*
 	 * Fixme: Any mode settings? e.g. blocking vs. non-blocking
 	 */
