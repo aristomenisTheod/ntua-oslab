@@ -56,32 +56,36 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 {
 	struct lunix_sensor_struct *sensor;
-	
+	uint32_t current_values[];
+	uint32_t current_last_update;
+
 	debug("leaving\n");
 
 	sensor=state->sensor;
+	spin_lock(sensor->lock);
+	
 	/*
 	 * Grab the raw data quickly, hold the
 	 * spinlock for as little as possible.
 	 */
-	/* ? */
-	down(state->lock);
-
-	lunix_protocol
-
-	up(state->lock);
-
+	current_values[BATT]=sensor->msr_data[BATT]->values[0];
+	current_values[TEMP]=sensor->msr_data[TEMP]->values[0];
+	current_values[LIGHT]=sensor->msr_data[LIGHT]->values[0];
+	current_last_update=sensor->msr_data[state->type]->last_update;
+	
 	/*
 	 * Any new data available?
 	 */
-	/* ? */
+	if(current_last_update==state->buf_timestamp) {
+		spin_unlock(sensor->lock);
+		return -EAGAIN;}
+	spin_unlock(sensor->lock);
 
 	/*
 	 * Now we can take our time to format them,
 	 * holding only the private state semaphore
 	 */
 	
-	/* ? */
 
 	debug("leaving\n");
 	return 0;
@@ -102,13 +106,8 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	if ((ret = nonseekable_open(inode, filp)) < 0)
 		goto out;
 
-	// state=container_of(inode->i_cdev,struct state,cdev);
-	// filp->private_data=state;
-	
 	minor=iminor(inode);
 	major=imajor(inode);
-	// filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8];
-	// filp->private_data->type=minor;
 	
 	state=kmalloc(sizeof(lunix_chrev_state_struct),GFP_KERNEL);
 	filp->private_data=state;
@@ -159,7 +158,9 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 				/* ? */
 				/* The process needs to sleep */
 				/* See LDD3, page 153 for a hint */
-			interuptible_sleep_on(sensor->wq); /* sends current proc to sleep */
+			up(state->lock);
+			wait_event_interruptible(sensor->wq,lunix_chrdev_state_needs_refresh(state)); /* sends current proc to sleep */
+			down(state->lock);
 		}
 	}
 
