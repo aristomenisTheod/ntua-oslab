@@ -58,6 +58,8 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	struct lunix_sensor_struct *sensor;
 	uint32_t current_values[];
 	uint32_t current_last_update;
+	uint32_t int_msr, dec_msr;
+	long msr;
 
 	debug("leaving\n");
 
@@ -85,6 +87,23 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	 * Now we can take our time to format them,
 	 * holding only the private state semaphore
 	 */
+	switch(state->type){
+		case(BATT):
+			msr = lookup_voltage(current_values[BATT]);
+			int_msr = msr/1000;
+			dec_msr = msr%1000;
+			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+		case(TEMP):
+			msr = lookup_temperature(current_values[TEMP]);
+			int_msr = msr/1000;
+			dec_msr = msr%1000;
+			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+		case(LIGHT):
+			msr = lookup_light(current_values[LIGHT]);
+			int_msr = msr/1000;
+			dec_msr = msr%1000;
+			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+	}
 	
 
 	debug("leaving\n");
@@ -106,9 +125,14 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	if ((ret = nonseekable_open(inode, filp)) < 0)
 		goto out;
 
+	/*
+	 * Associate this open file with the relevant sensor based on
+	 * the minor number of the device node [/dev/sensor<NO>-<TYPE>]
+	 */
 	minor=iminor(inode);
 	major=imajor(inode);
 	
+	/* Allocate a new Lunix character device private state structure */
 	state=kmalloc(sizeof(lunix_chrev_state_struct),GFP_KERNEL);
 	filp->private_data=state;
 	filp->private_data->sessor=lunix_sensor[(minor-filp->private_data->type)/8]
@@ -168,7 +192,8 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	/* ? */
 	
 	/* Determine the number of cached bytes to copy to userspace */
-	/* ? */
+	buf_lim = strlen((char*) buf_data);
+	while(buf_lim){copy_to_user(/*user_buf*/, buf_data, buf_lim);}
 
 	/* Auto-rewind on EOF mode? */
 	/* ? */
