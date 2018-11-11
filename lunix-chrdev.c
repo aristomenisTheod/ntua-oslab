@@ -92,17 +92,17 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 			msr = lookup_voltage(current_values[BATT]);
 			int_msr = msr/1000;
 			dec_msr = msr%1000;
-			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+			sprintf(state->buf_data, "%ld,%ld", int_msr, dec_msr);
 		case(TEMP):
 			msr = lookup_temperature(current_values[TEMP]);
 			int_msr = msr/1000;
 			dec_msr = msr%1000;
-			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+			sprintf(state->buf_data, "%ld,%ld", int_msr, dec_msr);
 		case(LIGHT):
 			msr = lookup_light(current_values[LIGHT]);
 			int_msr = msr/1000;
 			dec_msr = msr%1000;
-			sprintf(buf_data, "%ld,%ld", int_msr, dec_msr);
+			sprintf(state->buf_data, "%ld,%ld", int_msr, dec_msr);
 	}
 	
 
@@ -192,8 +192,8 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	/* ? */
 	
 	/* Determine the number of cached bytes to copy to userspace */
-	buf_lim = strlen((char*) buf_data);
-	while(buf_lim){copy_to_user(/*user_buf*/, buf_data, buf_lim);}
+	state->buf_lim = strlen((char*) (state->buf_data));
+	while(state->buf_lim){copy_to_user(/*user_buf*/, state->buf_data, state->buf_lim);}
 
 	/* Auto-rewind on EOF mode? */
 	/* ? */
