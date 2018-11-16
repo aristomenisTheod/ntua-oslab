@@ -1,3 +1,58 @@
+/*
+ * lunix-chrdev.c
+ *
+ * Implementation of character devices
+ * for Lunix:TNG
+ *
+ * < device name >
+ *
+ */
+
+#include <linux/mm.h>
+#include <linux/fs.h>
+#include <linux/init.h>
+#include <linux/list.h>
+#include <linux/cdev.h>
+#include <linux/poll.h>
+#include <linux/slab.h>
+#include <linux/sched.h>
+#include <linux/ioctl.h>
+#include <linux/types.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/mmzone.h>
+#include <linux/vmalloc.h>
+#include <linux/spinlock.h>
+#include <linux/semaphore.h>
+
+#include "lunix.h"
+#include "lunix-chrdev.h"
+#include "lunix-lookup.h"
+#include "linux/thread_info.h"
+
+#define current (current_thread_info()->task) /* get pid of current process */
+
+struct state lunix_chrdev_state;
+
+/*
+ * Just a quick [unlocked] check to see if the cached
+ * chrdev state needs to be updated from sensor measurements.
+ */
+static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *state)
+{
+	struct lunix_sensor_struct *sensor;
+	
+	WARN_ON ( !(sensor = state->sensor));	
+
+	/* The following return is bogus, just for the stub to compile */
+	return !(sensor->msr_data[state->type]->last_update==state->buf_timestamp);
+}
+
+/*
+ * Updates the cached state of a character device
+ * based on sensor data. Must be called with the
+ * character device state lock held.
+ */
 static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 {
         struct lunix_sensor_struct *sensor;
