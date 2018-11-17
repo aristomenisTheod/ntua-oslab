@@ -32,7 +32,7 @@
 
 #define current (current_thread_info()->task) /* get pid of current process */
 
-struct state lunix_chrdev_state;
+struct cdev lunix_chrdev_cdev;
 
 /*
  * Just a quick [unlocked] check to see if the cached
@@ -42,7 +42,7 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 {
 	struct lunix_sensor_struct *sensor;
 	
-	WARN_ON ( !(sensor = state->sensor));	
+	WARN_ON (!(sensor = state->sensor));	
 
 	/* The following return is bogus, just for the stub to compile */
 	return !(sensor->msr_data[state->type]->last_update==state->buf_timestamp);
@@ -55,50 +55,50 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
  */
 static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 {
-        struct lunix_sensor_struct *sensor;
-        uint32_t current_values;
-        uint32_t current_last_update;
-        long int_msr, dec_msr;
-        long msr;
+		struct lunix_sensor_struct *sensor;
+		uint32_t current_values;
+		uint32_t current_last_update;
+		long int_msr, dec_msr;
+		long msr;
 
-        debug("leaving\n");
+		debug("leaving\n");
 
-        sensor=state->sensor;
-        spin_lock(&sensor->lock);
+		sensor=state->sensor;
+		spin_lock(&sensor->lock);
 
-        /*
-         * Grab the raw data quickly, hold the
-         * spinlock for as little as possible.
-         */
+		/*
+		 * Grab the raw data quickly, hold the
+		 * spinlock for as little as possible.
+		 */
 
-        current_values=sensor->msr_data[state->type]->values[0];
-        current_last_update=sensor->msr_data[state->type]->last_update;
+		current_values=sensor->msr_data[state->type]->values[0];
+		current_last_update=sensor->msr_data[state->type]->last_update;
 
-        /*
-         * Any new data available?
-         */
-        spin_unlock(&sensor->lock);
-        if(current_last_update==state->buf_timestamp) {
-                return -EAGAIN;}
-        /*
-         * Now we can take our time to format them,
-         * holding only the private state semaphore
-         */
-        switch(state->type){
-                case(BATT):
-                        msr = lookup_voltage[current_values];
-                        break;
-                case(TEMP):
-                        msr = lookup_temperature[current_values];
-                        break;
-                case(LIGHT):
-                        msr = lookup_light[current_values];
+		/*
+		 * Any new data available?
+		 */
+		spin_unlock(&sensor->lock);
+		if(current_last_update==state->buf_timestamp) {
+				return -EAGAIN;}
+		/*
+		 * Now we can take our time to format them,
+		 * holding only the private state semaphore
+		 */
+		switch(state->type){
+				case(BATT):
+						msr = lookup_voltage[current_values];
+						break;
+				case(TEMP):
+						msr = lookup_temperature[current_values];
+						break;
+				case(LIGHT):
+						msr = lookup_light[current_values];
 	}
 	
 	int_msr = msr/1000;
-    dec_msr = msr%1000;
-    state->buf_lim=sprintf(state->buf_data, "%ld,%ld\n", int_msr, dec_msr);
-    state->buf_timestamp=current_last_update;
+	dec_msr = msr%1000;
+	state->buf_lim=sprintf(state->buf_data, "%ld,%ld\n", int_msr, dec_msr);
+	state->buf_timestamp=current_last_update;
 
 	debug("leaving\n");
 	return 0;
@@ -128,12 +128,12 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	
 	/* Allocate a new Lunix character device private state structure */
 	state=kmalloc(sizeof(struct lunix_chrdev_state_struct),GFP_KERNEL);
-    state->buf_timestamp=0;
-    state->type=minor%8;
-    state->sensor=&lunix_sensors[minor/8];
-    filp->private_data=state;
-    sema_init(&state->lock,1);
-    ret=0;
+	state->buf_timestamp=0;
+	state->type=minor%8;
+	state->sensor=&lunix_sensors[minor/8];
+	filp->private_data=state;
+	sema_init(&state->lock,1);
+	ret=0;
 
 
 out:
@@ -187,22 +187,22 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 
 	/* End of file */
 	if(cnt>state->buf_lim-*f_pos)
-                cnt=state->buf_lim;
-        ret=cnt;
+				cnt=state->buf_lim;
+		ret=cnt;
 
-        /* Determine the number of cached bytes to copy to userspace */
-        if(copy_to_user(usrbuf, state->buf_data+*f_pos, cnt)){
-                ret=-EFAULT;
-                goto out;
-        }
-        *f_pos+=cnt;
-        /* Auto-rewind on EOF mode? */
-        if(*f_pos>=state->buf_lim) *f_pos=0;
+		/* Determine the number of cached bytes to copy to userspace */
+		if(copy_to_user(usrbuf, state->buf_data+*f_pos, cnt)){
+				ret=-EFAULT;
+				goto out;
+		}
+		*f_pos+=cnt;
+		/* Auto-rewind on EOF mode? */
+		if(*f_pos>=state->buf_lim) *f_pos=0;
 out:
-        /* Unlock? */
-        up(&state->lock);
+		/* Unlock? */
+		up(&state->lock);
 
-        return ret;
+		return ret;
 }
 
 static int lunix_chrdev_mmap(struct file *filp, struct vm_area_struct *vma)
@@ -212,7 +212,7 @@ static int lunix_chrdev_mmap(struct file *filp, struct vm_area_struct *vma)
 
 static struct file_operations lunix_chrdev_fops = 
 {
-    .owner          = THIS_MODULE,
+	.owner          = THIS_MODULE,
 	.open           = lunix_chrdev_open,
 	.release        = lunix_chrdev_release,
 	.read           = lunix_chrdev_read,
@@ -231,22 +231,20 @@ int lunix_chrdev_init(void)
 	dev_t dev_no;
 	unsigned int lunix_minor_cnt = lunix_sensor_cnt << 3;
 	
-	debug("initializing character device\n");
-	cdev_init(&(lunix_chrdev_state->lunix_chrdev_cdev), &lunix_chrdev_fops);
-	lunix_chrdev_state->lunix_chrdev_cdev.owner = THIS_MODULE;
-	
+	cdev_init(&lunix_chrdev_cdev, &lunix_chrdev_fops);
+
 	dev_no = MKDEV(LUNIX_CHRDEV_MAJOR, 0);
 	/* register_chrdev_region? */
 	ret=register_chrdev_region(dev_no,lunix_minor_cnt,"lunix"); /*device name???*/
 	if (ret < 0) {
-		debug("failed to register region, ret = %d\n", ret);
-		goto out;
-	}	
+			debug("failed to register region, ret = %d\n", ret);
+			goto out;
+	}       
 	/* cdev_add? */
-	ret=cdev_add(lunix_chrdev_state->lunix_chrdev_cdev,dev_no,lunix_minor_cnt);
+	ret=cdev_add(&lunix_chrdev_cdev,dev_no,lunix_minor_cnt);
 	if (ret < 0) {
-		debug("failed to add character device\n");
-		goto out_with_chrdev_region;
+			debug("failed to add character device\n");
+			goto out_with_chrdev_region;
 	}
 	debug("completed successfully\n");
 	return 0;
