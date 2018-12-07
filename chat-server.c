@@ -49,11 +49,12 @@ ssize_t insist_write(int fd, const void *buf, size_t cnt)
 	return orig_cnt;
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
+	fd_set readfd;
 	char buf[100];
 	char addrstr[INET_ADDRSTRLEN];
-	int sd, newsd;
+	int sd, fd=0, newsd, rfd, sret;
 	ssize_t n;
 	socklen_t len;
 	struct sockaddr_in sa;
@@ -100,29 +101,61 @@ int main(void)
 			perror("could not format IP address");
 			exit(1);
 		}
-		fprintf(stderr, "Incoming connection from %s:%d\n",
-			addrstr, ntohs(sa.sin_port));
-		write(atoi(argv[1]),newsd,sizeof(int));
+		fprintf(stderr, "Incoming connection from %s:%d\n", addrstr, ntohs(sa.sin_port));
+		//write(atoi(argv[1]),newsd,sizeof(int));
 
-	// 	/* We break out of the loop when the remote peer goes away */
-	// 	for (;;) {
-	// 		n = read(newsd, buf, sizeof(buf));
-	// 		if (n <= 0) {
-	// 			if (n < 0)
-	// 				perror("read from remote peer failed");
-	// 			else
-	// 				fprintf(stderr, "Peer went away\n");
-	// 			break;
-	// 		}
-	// 		toupper_buf(buf, n);
-	// 		if (insist_write(newsd, buf, n) != n) {
-	// 			perror("write to remote peer failed");
-	// 			break;
-	// 		}
-	// 	}
+	 	/* We break out of the loop when the remote peer goes away */
+	 	for (;;) {
+	 		FD_ZERO(&readfd);
+			FD_SET(newsd,&readfd);
+			FD_SET(fd,&readfd);
+
+	 		sret=select(newsd+1,&readfd,NULL,NULL,NULL);
+	 		
+	 		if(sret<0){
+			printf("something went wrong\n");
+			}
+			else{
+				char *usr;
+				if(FD_ISSET(fd,&readfd)){
+					*usr="";
+					rfd=0;	
+				}
+				else {
+					*usr="[client]:";
+					rfd=newsd;
+					n = read(rfd, buf, sizeof(buf));
+				}
+				if (n < 0) {
+					perror("read from remote peer failed");
+					exit(1);
+				}
+
+				if (n <= 0)
+					break;
+				insist_write(rfd, usr, sizeof(usr));
+				if (insist_write(0, buf, n) != n) {
+					perror("write to remote peer failed");
+					exit(1);
+				}
+			}
+	 		/*n = read(newsd, buf, sizeof(buf));
+	 		if (n <= 0) {
+	 			if (n < 0)
+	 				perror("read from remote peer failed");
+	 			else
+	 				fprintf(stderr, "Peer went away\n");
+	 			break;
+	 		}
+	 		toupper_buf(buf, n);
+	 		if (insist_write(newsd, buf, n) != n) {
+	 			perror("write to remote peer failed");
+	 			break;
+	 		}*/
+	 	}
 		/* Make sure we don't leak open files */
-		// if (close(newsd) < 0)
-		// 	perror("close");
+		if (close(newsd) < 0)
+			perror("close");
 	}
 
 	/* This will never happen */
