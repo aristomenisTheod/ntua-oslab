@@ -21,7 +21,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include "socket-common.h"
+#include "chat-common.h"
 
 /* Insist until all of the data has been written */
 ssize_t insist_write(int fd, const void *buf, size_t cnt)
@@ -43,11 +43,15 @@ ssize_t insist_write(int fd, const void *buf, size_t cnt)
 int main(int argc, char *argv[])
 {
 	int sd, port;
-	ssize_t n;
-	char buf[100];
+	ssize_t n,sret;
+	char buf[100],usr[10];
 	char *hostname;
 	struct hostent *hp;
 	struct sockaddr_in sa;
+
+	fd_set readfd;
+	int rfd,fd=0,wfd;
+
 
 	if (argc != 3) {
 		fprintf(stderr, "Usage: %s hostname port\n", argv[0]);
@@ -79,47 +83,51 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	fprintf(stderr, "Connected.\n");
-	write(atoi(rgv[3]),sd,sizeof(int));
-	close(atoi(rgv[3]));
+	const int nfds=(int)sd+1;
 
 	/* Be careful with buffer overruns, ensure NUL-termination */
-	// strncpy(buf, HELLO_THERE, sizeof(buf));
-	// buf[sizeof(buf) - 1] = '\0';
 
-	// /* Say something... */
-	// if (insist_write(sd, buf, strlen(buf)) != strlen(buf)) {
-	// 	perror("write");
-	// 	exit(1);
-	// }
-	// fprintf(stdout, "I said:\n%s\nRemote says:\n", buf);
-	// fflush(stdout);
-
-	
-	//  * Let the remote know we're not going to write anything else.
-	//  * Try removing the shutdown() call and see what happens.
-	 
 	// if (shutdown(sd, SHUT_WR) < 0) {
 	// 	perror("shutdown");
 	// 	exit(1);
 	// }
 
-	// /* Read answer and write it to standard output */
-	// for (;;) {
-	// 	n = read(sd, buf, sizeof(buf));
+	for(;;){
+		FD_ZERO(&readfd);
+		FD_SET(sd,&readfd);
+		FD_SET(fd,&readfd);
+		/*check if someone has writen to the socket or to stdin*/
+		sret=select(nfds,&readfd,NULL,NULL,NULL);
 
-	// 	if (n < 0) {
-	// 		perror("read");
-	// 		exit(1);
-	// 	}
+		if(sret<0){
+			perror("select");
+			continue;
+		}
+		else{
+			if(FD_ISSET(sd,&readfd)){
+				rfd=sd;
+				wfd=1;
+				strncpy(usr, SERVER, sizeof(usr));
+			}
+			if(FD_ISSET(fd,&readfd)){
+				rfd=fd;
+				wfd=sd;
+				strncpy(usr, EMPTY, sizeof(usr));
+			}
+		}
 
-	// 	if (n <= 0)
-	// 		break;
+		n=read(rfd,buf,sizeof(buf));
+		if(n<=0){
+			perror("read");
+			continue;
+		}
+		insist_write(1, usr, sizeof(usr));
+		if (insist_write(wfd, buf, n) != n) {
+			perror("write to remote peer failed");
+			exit(1);
+		}
 
-	// 	if (insist_write(0, buf, n) != n) {
-	// 		perror("write");
-	// 		exit(1);
-	// 	}
-	// }
+	}
 
 	fprintf(stderr, "\nDone.\n");
 	return 0;
