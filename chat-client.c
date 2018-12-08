@@ -101,25 +101,29 @@ int main(int argc, char *argv[])
 
 		if(sret<0){
 			perror("select");
-			continue;
+			break;
 		}
 		else{
 			if(FD_ISSET(sd,&readfd)){
 				rfd=sd;
 				wfd=1;
 				strncpy(usr, SERVER, sizeof(usr));
+				n=read(rfd,buf,sizeof(buf));
+				if(n<=0){
+					printf("connection to peer lost\n");
+					break;
+				}
 			}
 			if(FD_ISSET(fd,&readfd)){
 				rfd=fd;
 				wfd=sd;
 				strncpy(usr, EMPTY, sizeof(usr));
+				n=read(rfd,buf,sizeof(buf));
+				if(n<=0){
+					perror("read");
+					continue;
+				}
 			}
-		}
-
-		n=read(rfd,buf,sizeof(buf));
-		if(n<=0){
-			perror("read");
-			continue;
 		}
 		insist_write(1, usr, sizeof(usr));
 		if (insist_write(wfd, buf, n) != n) {
@@ -129,6 +133,10 @@ int main(int argc, char *argv[])
 
 	}
 
+	if (shutdown(sd, SHUT_WR) < 0) {
+		perror("shutdown");
+		exit(1);
+	}
 	fprintf(stderr, "\nDone.\n");
 	return 0;
 }
