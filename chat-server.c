@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
 	char buf[100],*temp_buf;
 	char usr[10],key[16],iv[16];
 	char addrstr[INET_ADDRSTRLEN];
-	int sd, fd=1,wfd, newsd, rfd, sret;
+	int sd, fd=1,wfd, newsd, rfd, sret,i;
 	ssize_t n;
 	socklen_t len;
 	struct sockaddr_in sa;
@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
 		//write(atoi(argv[1]),newsd,sizeof(int));
 		printf("insert key:\n");
 		scanf("%x",key);
-		while(sizeof(key)!=16){
+		while(sizeof(key)!=16*sizeof(char)){
 			printf("please insert key again\n");
 			scanf("%x",key);
 		}
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 
 		printf("insert iv:\n");
 		scanf("%x",iv);
-		while(sizeof(iv)!=16){
+		while(sizeof(iv)!=16*sizeof(char)){
 			printf("please insert iv again\n");
 			scanf("%x",iv);
 		}
@@ -138,6 +138,8 @@ int main(int argc, char* argv[])
 					wfd=newsd;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, EMPTY, sizeof(usr));
+					for(i=0;i<100;i++)
+						if(buf[i]==0) buf[i]='\0';
 					temp_buf=encrypt(buf,sizeof(buf),key,iv);
 					printf("original:\n");
 					if (insist_write(wfd, buf, n) != n) {
@@ -155,7 +157,9 @@ int main(int argc, char* argv[])
 					wfd=1;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, CLIENT, sizeof(usr));
-					temp_buf=decrypt(buf,sizeof(buf),key,iv);
+					for(i=0;i<100;i++)
+					if(buf[i]==0) buf[i]='\0';
+						temp_buf=decrypt(buf,sizeof(buf),key,iv);
 					printf("encrypted:\n");
 					if (insist_write(wfd, buf, n) != n) {
 						perror("write to remote peer failed");

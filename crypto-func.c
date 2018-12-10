@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 
 #include <crypto/cryptodev.h>
-
 #define KEY_SIZE 16  /* AES128 */
 #define BLOCK_SIZE 16
 
@@ -30,8 +29,7 @@ ssize_t insist_read(int fd, void *buf, size_t cnt)
         return orig_cnt;
 }
 
-
-static int fill_urandom_buf(char *buf, size_t cnt)
+int fill_urandom_buf(unsigned char *buf, size_t cnt)
 {
         int crypto_fd;
         int ret = -1;
@@ -46,17 +44,16 @@ static int fill_urandom_buf(char *buf, size_t cnt)
         return ret;
 }
 
-
-char* decrypt(const char *msg,int size,char *key, char *iv){
+char* decrypt(const char msg[100],int size,char key[KEY_SIZE], char iv[BLOCK_SIZE]){
 	struct session_op sess;
 	struct crypt_op cryp;
 	int cfd;
 	struct {
-		char in[size],
+		unsigned char in[size],
 				encrypted[size],
 				decrypted[size],
-				*iv,
-				*key;
+				iv[BLOCK_SIZE],
+				key[KEY_SIZE];
 	}data;
 
 	memset(&sess, 0, sizeof(sess));
@@ -74,16 +71,23 @@ char* decrypt(const char *msg,int size,char *key, char *iv){
 	// }
 
 	strcpy(data.in,msg);
-	data.key=key;
-	data.iv=iv;
+	// data.key=key;
+	// data.iv=iv;
+	// memcpy(data.iv,iv,sizeof(iv));
+	// memcpy(data.key,key,sizeof(key));
 	sess.cipher = CRYPTO_AES_CBC;
 	sess.keylen = KEY_SIZE;
-	sess.key = data.key;
+	sess.key = key;
+
+	if (ioctl(cfd, CIOCGSESSION, &sess)) {
+		perror("ioctl(CIOCGSESSION)");
+		return 1;
+	}
 
 	cryp.ses = sess.ses;
 	cryp.len = sizeof(data.in);
 	cryp.src = data.in;
-	cryp.iv = data.iv;
+	cryp.iv = iv;
 	cryp.dst = data.decrypted;
 	cryp.op = COP_DECRYPT;
 	if (ioctl(cfd, CIOCCRYPT, &cryp)) {
@@ -97,16 +101,16 @@ char* decrypt(const char *msg,int size,char *key, char *iv){
 	return data.decrypted;
 }
 
-char* encrypt(const char *msg,int size,char* key, char *iv){
+char* encrypt(const char *msg,int size,unsigned char key[KEY_SIZE], char iv[BLOCK_SIZE]){
 	struct session_op sess;
 	struct crypt_op cryp;
 	int cfd;
 	struct {
-		char in[size],
+		unsigned char in[size],
 				encrypted[size],
 				decrypted[size],
-				iv[size],
-				*key;
+				iv[BLOCK_SIZE],
+				key[KEY_SIZE];
 	}data;
 
 	memset(&sess, 0, sizeof(sess));
@@ -123,19 +127,26 @@ char* encrypt(const char *msg,int size,char* key, char *iv){
 		return NULL;
 	}
 
+	// data.key=key;
+	// data.iv=iv;
+	// memcpy(data.iv,iv,sizeof(iv));
+	// memcpy(data.key,key,sizeof(key));
 	strcpy(data.in,msg);
-	data.key=key;
-	data.iv=iv;
 	sess.cipher = CRYPTO_AES_CBC;
 	sess.keylen = KEY_SIZE;
-	sess.key = data.key;
+	sess.key = key;
+
+	if (ioctl(cfd, CIOCGSESSION, &sess)) {
+		perror("ioctl(CIOCGSESSION)");
+		return 1;
+	}
 
 	cryp.ses = sess.ses;
 	cryp.len = sizeof(data.in);
 	cryp.src = data.in;
-	cryp.iv = data.iv;
+	cryp.iv = iv;
 	cryp.dst = data.encrypted;
-	cryp.op = COP_DECRYPT;
+	cryp.op = COP_ENCRYPT;
 	if (ioctl(cfd, CIOCCRYPT, &cryp)) {
 		perror("ioctl(CIOCCRYPT)");
 		return NULL;

@@ -1,10 +1,3 @@
-/*
- * socket-client.c
- * Simple TCP/IP communication using sockets
- *
- * Vangelis Koukis <vkoukis@cslab.ece.ntua.gr>
- */
-
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
@@ -22,6 +15,7 @@
 #include <netinet/in.h>
 
 #include "chat-common.h"
+#define HELLO_THERE "Hello my friend!"
 
 /* Insist until all of the data has been written */
 ssize_t insist_write(int fd, const void *buf, size_t cnt)
@@ -42,16 +36,15 @@ ssize_t insist_write(int fd, const void *buf, size_t cnt)
 
 int main(int argc, char *argv[])
 {
-	int sd, port;
+	int sd, port,i;
 	ssize_t n,sret;
 	char buf[100],usr[10],*temp_buf;
 	char *hostname;
 	struct hostent *hp;
 	struct sockaddr_in sa;
 	int rfd,fd=0,wfd;
-	char key[16],iv[16];
+	char key[KEY_SIZE],iv[BLOCK_SIZE];
 	fd_set readfd;
-
 
 	if (argc != 3) {
 		fprintf(stderr, "Usage: %s hostname port\n", argv[0]);
@@ -60,26 +53,25 @@ int main(int argc, char *argv[])
 	hostname = argv[1];
 	port = atoi(argv[2]); /* Needs better error checking */
 
-	if (fill_urandom_buf(data.iv, BLOCK_SIZE) < 0) {
+	if (fill_urandom_buf(iv, BLOCK_SIZE) < 0) {
 		perror("getting data from /dev/urandom\n");
 		return 1;
 	}
 
-	if (fill_urandom_buf(data.key, KEY_SIZE) < 0) {
+	if (fill_urandom_buf(key, KEY_SIZE) < 0) {
 		perror("getting data from /dev/urandom\n");
 		return 1;
 	}
 
 	printf("\nInitialization vector (IV):\n");
 	for (i = 0; i < BLOCK_SIZE; i++)
-		printf("%x", data.iv[i]);
+		printf("%x", iv[i]);
 	printf("\n");
 
 	printf("\nEncryption key:\n");
 	for (i = 0; i < KEY_SIZE; i++)
-		printf("%x", data.key[i]);
+		printf("%x", key[i]);
 	printf("\n");
-			
 
 	// printf("insert key:\n");
 	// scanf("%s",key);
@@ -112,8 +104,13 @@ int main(int argc, char *argv[])
 	}
 	fprintf(stderr, "Connected.\n");
 	const int nfds=(int)sd+1;
+	strncpy(buf, HELLO_THERE, sizeof(buf));
+	buf[sizeof(buf) - 1] = '\0';
 
-
+	temp_buf=encrypt(buf,sizeof(buf),key,iv);
+	printf("encrypted:%s\n",temp_buf);
+	temp_buf=decrypt(buf,sizeof(buf),key,iv);
+	printf("decrypted%s\n", temp_buf);
 
 	/* Be careful with bufer overruns, ensure NUL-termination */
 
@@ -133,22 +130,23 @@ int main(int argc, char *argv[])
 				wfd=1;
 				strncpy(usr, SERVER, sizeof(usr));
 				n=read(rfd,buf,sizeof(buf));
-				// temp=buf;
+				for(i=0;i<100;i++)
+					if(buf[i]==0) buf[i]='\0';
 				if(n<=0){
 					printf("connection to peer lost\n");
 					break;
 				}
 				temp_buf=decrypt(buf,sizeof(buf),key,iv);
 				printf("encrypted:\n");
-					if (insist_write(wfd, buf, n) != n) {
-						perror("write to remote peer failed");
-						exit(1);
-					}
-					printf("decrypted:\n");
-					if (insist_write(wfd, temp_buf, n) != n) {
-						perror("write to remote peer failed");
-						exit(1);
-					}
+				if (insist_write(wfd, buf, n) != n) {
+					perror("write to remote peer failed");
+					exit(1);
+				}
+				printf("decrypted:\n");
+				if (insist_write(wfd, temp_buf, n) != n) {
+					perror("write to remote peer failed");
+					exit(1);
+				}
 			}
 			if(FD_ISSET(fd,&readfd)){
 				rfd=fd;
@@ -160,6 +158,8 @@ int main(int argc, char *argv[])
 					perror("read");
 					continue;
 				}
+				for(i=0;i<100;i++)
+					if(buf[i]==0) buf[i]='\0';
 				temp_buf=encrypt(buf,sizeof(buf),key,iv);
 				printf("original:\n");
 					if (insist_write(wfd, buf, n) != n) {

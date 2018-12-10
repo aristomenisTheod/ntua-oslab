@@ -15,8 +15,12 @@
 #define CLIENT "/n[client]:"
 #define SERVER "/n[server]:"
 #define EMPTY ""
-#endif /* _SOCKET_COMMON_H */
+#define KEY_SIZE 16  /* AES128 */
+#define BLOCK_SIZE 16
 
-char* decrypt(const char *msg,int size,char *key);
-char* encrypt(const char *msg,int size,char *key);
+char* decrypt(const char *msg,int size,char* key,char* iv);
+char* encrypt(const char *msg,int size,char* key,char* iv);
+int fill_urandom_buf(char *buf, size_t cnt);
+
+#endif /* _SOCKET_COMMON_H */
 
