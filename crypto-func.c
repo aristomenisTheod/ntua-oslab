@@ -47,7 +47,7 @@ static int fill_urandom_buf(char *buf, size_t cnt)
 }
 
 
-char* decrypt(const char *msg,int size,char *key){
+char* decrypt(const char *msg,int size,char *key, char *iv){
 	struct session_op sess;
 	struct crypt_op cryp;
 	int cfd;
@@ -55,7 +55,7 @@ char* decrypt(const char *msg,int size,char *key){
 		char in[size],
 				encrypted[size],
 				decrypted[size],
-				iv[size],
+				*iv,
 				*key;
 	}data;
 
@@ -68,13 +68,14 @@ char* decrypt(const char *msg,int size,char *key){
 		return NULL;
 	}
 
-	if (fill_urandom_buf(data.iv, BLOCK_SIZE) < 0) {
-		perror("getting data from /dev/urandom\n");
-		return NULL;
-	}
+	// if (fill_urandom_buf(data.iv, BLOCK_SIZE) < 0) {
+	// 	perror("getting data from /dev/urandom\n");
+	// 	return NULL;
+	// }
 
 	strcpy(data.in,msg);
 	data.key=key;
+	data.iv=iv;
 	sess.cipher = CRYPTO_AES_CBC;
 	sess.keylen = KEY_SIZE;
 	sess.key = data.key;
@@ -96,7 +97,7 @@ char* decrypt(const char *msg,int size,char *key){
 	return data.decrypted;
 }
 
-char* encrypt(const char *msg,int size,char* key){
+char* encrypt(const char *msg,int size,char* key, char *iv){
 	struct session_op sess;
 	struct crypt_op cryp;
 	int cfd;
@@ -124,6 +125,7 @@ char* encrypt(const char *msg,int size,char* key){
 
 	strcpy(data.in,msg);
 	data.key=key;
+	data.iv=iv;
 	sess.cipher = CRYPTO_AES_CBC;
 	sess.keylen = KEY_SIZE;
 	sess.key = data.key;

@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 	struct hostent *hp;
 	struct sockaddr_in sa;
 	int rfd,fd=0,wfd;
-	char key[16];
+	char key[16],iv[16];
 	fd_set readfd;
 
 
@@ -59,13 +59,35 @@ int main(int argc, char *argv[])
 	}
 	hostname = argv[1];
 	port = atoi(argv[2]); /* Needs better error checking */
-	printf("insert key:\n");
-	scanf("%s",key);
-	while(sizeof(key)!=16){
-		printf("please insert key again(16 characters)\n");
-		scanf("%s",key);
+
+	if (fill_urandom_buf(data.iv, BLOCK_SIZE) < 0) {
+		perror("getting data from /dev/urandom\n");
+		return 1;
 	}
-	printf("key accepted!\n");
+
+	if (fill_urandom_buf(data.key, KEY_SIZE) < 0) {
+		perror("getting data from /dev/urandom\n");
+		return 1;
+	}
+
+	printf("\nInitialization vector (IV):\n");
+	for (i = 0; i < BLOCK_SIZE; i++)
+		printf("%x", data.iv[i]);
+	printf("\n");
+
+	printf("\nEncryption key:\n");
+	for (i = 0; i < KEY_SIZE; i++)
+		printf("%x", data.key[i]);
+	printf("\n");
+			
+
+	// printf("insert key:\n");
+	// scanf("%s",key);
+	// while(sizeof(key)!=16){
+	// 	printf("please insert key again(16 characters)\n");
+	// 	scanf("%s",key);
+	// }
+	// printf("key accepted!\n");
 	/* Create TCP/IP socket, used as main chat channel */
 	if ((sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
@@ -91,6 +113,8 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Connected.\n");
 	const int nfds=(int)sd+1;
 
+
+
 	/* Be careful with bufer overruns, ensure NUL-termination */
 
 	for(;;){
@@ -114,7 +138,7 @@ int main(int argc, char *argv[])
 					printf("connection to peer lost\n");
 					break;
 				}
-				temp_buf=decrypt(buf,sizeof(buf),key);
+				temp_buf=decrypt(buf,sizeof(buf),key,iv);
 				printf("encrypted:\n");
 					if (insist_write(wfd, buf, n) != n) {
 						perror("write to remote peer failed");
@@ -136,7 +160,7 @@ int main(int argc, char *argv[])
 					perror("read");
 					continue;
 				}
-				temp_buf=encrypt(buf,sizeof(buf),key);
+				temp_buf=encrypt(buf,sizeof(buf),key,iv);
 				printf("original:\n");
 					if (insist_write(wfd, buf, n) != n) {
 						perror("write to remote peer failed");

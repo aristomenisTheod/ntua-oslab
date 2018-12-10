@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 {
 	fd_set readfd;
 	char buf[100],*temp_buf;
-	char usr[10],key[16];
+	char usr[10],key[16],iv[16];
 	char addrstr[INET_ADDRSTRLEN];
 	int sd, fd=1,wfd, newsd, rfd, sret;
 	ssize_t n;
@@ -102,12 +102,23 @@ int main(int argc, char* argv[])
 		}
 		fprintf(stderr, "Incoming connection from %s:%d\n", addrstr, ntohs(sa.sin_port));
 		const int nfds=(int)newsd+1;
+
+
+
 		//write(atoi(argv[1]),newsd,sizeof(int));
 		printf("insert key:\n");
-		scanf("%s",key);
+		scanf("%x",key);
 		while(sizeof(key)!=16){
-			printf("please insert key again(16 characters)\n");
-			scanf("%s",key);
+			printf("please insert key again\n");
+			scanf("%x",key);
+		}
+		printf("key accepted!\n");
+
+		printf("insert iv:\n");
+		scanf("%x",iv);
+		while(sizeof(iv)!=16){
+			printf("please insert iv again\n");
+			scanf("%x",iv);
 		}
 		printf("key accepted!\n");
 	 	/* We break out of the loop when the remote peer goes away */
@@ -127,7 +138,7 @@ int main(int argc, char* argv[])
 					wfd=newsd;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, EMPTY, sizeof(usr));
-					temp_buf=encrypt(buf,sizeof(buf),key);
+					temp_buf=encrypt(buf,sizeof(buf),key,iv);
 					printf("original:\n");
 					if (insist_write(wfd, buf, n) != n) {
 						perror("write to remote peer failed");
@@ -144,7 +155,7 @@ int main(int argc, char* argv[])
 					wfd=1;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, CLIENT, sizeof(usr));
-					temp_buf=decrypt(buf,sizeof(buf),key);
+					temp_buf=decrypt(buf,sizeof(buf),key,iv);
 					printf("encrypted:\n");
 					if (insist_write(wfd, buf, n) != n) {
 						perror("write to remote peer failed");
