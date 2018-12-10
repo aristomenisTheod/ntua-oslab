@@ -44,13 +44,13 @@ int main(int argc, char *argv[])
 {
 	int sd, port;
 	ssize_t n,sret;
-	char buf[100],usr[10];
+	char buf[100],usr[10],*buff;
 	char *hostname;
 	struct hostent *hp;
 	struct sockaddr_in sa;
-
-	fd_set readfd;
 	int rfd,fd=0,wfd;
+	char key[16];
+	fd_set readfd;
 
 
 	if (argc != 3) {
@@ -59,7 +59,13 @@ int main(int argc, char *argv[])
 	}
 	hostname = argv[1];
 	port = atoi(argv[2]); /* Needs better error checking */
-
+	printf("insert key:\n");
+	scanf("%s",key);
+	while(sizeof(key)!=16){
+		printf("please insert key again(16 characters)\n");
+		scanf("%s",key);
+	}
+	printf("key accepted!\n");
 	/* Create TCP/IP socket, used as main chat channel */
 	if ((sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
@@ -98,7 +104,7 @@ int main(int argc, char *argv[])
 		FD_SET(fd,&readfd);
 		/*check if someone has writen to the socket or to stdin*/
 		sret=select(nfds,&readfd,NULL,NULL,NULL);
-
+		const char *temp;
 		if(sret<0){
 			perror("select");
 			break;
@@ -109,24 +115,28 @@ int main(int argc, char *argv[])
 				wfd=1;
 				strncpy(usr, SERVER, sizeof(usr));
 				n=read(rfd,buf,sizeof(buf));
+				temp=buf;
 				if(n<=0){
 					printf("connection to peer lost\n");
 					break;
 				}
+				buff=decrypt(temp,sizeof(buf),key);
 			}
 			if(FD_ISSET(fd,&readfd)){
 				rfd=fd;
 				wfd=sd;
 				strncpy(usr, EMPTY, sizeof(usr));
 				n=read(rfd,buf,sizeof(buf));
+				temp=buf;
 				if(n<=0){
 					perror("read");
 					continue;
 				}
+				buff=encrypt(temp,sizeof(buf),key);
 			}
 		}
 		insist_write(1, usr, sizeof(usr));
-		if (insist_write(wfd, buf, n) != n) {
+		if (insist_write(wfd, buff, n) != n) {
 			perror("write to remote peer failed");
 			exit(1);
 		}

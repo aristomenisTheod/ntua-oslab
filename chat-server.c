@@ -1,10 +1,3 @@
-/*
- * socket-server.c
- * Simple TCP/IP communication using sockets
- *
- * Vangelis Koukis <vkoukis@cslab.ece.ntua.gr>
- */
-
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
@@ -20,10 +13,14 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <crypto/cryptodev.h>
 
 #include "chat-common.h"
+#define KEY_SIZE 16  /* AES128 */
+#define BLOCK_SIZE 16
 
 /* Convert a buffer to upercase */
+
 void toupper_buf(char *buf, size_t n)
 {
 	size_t i;
@@ -49,27 +46,13 @@ ssize_t insist_write(int fd, const void *buf, size_t cnt)
 	return orig_cnt;
 }
 
-ssize_t insist_read(int fd, void *buf, size_t cnt)
-{
-        ssize_t ret;
-        size_t orig_cnt = cnt;
-
-        while (cnt > 0) {
-                ret = read(fd, buf, cnt);
-                if (ret < 0)
-                        return ret;
-                buf += ret;
-                cnt -= ret;
-        }
-
-        return orig_cnt;
-}
 
 int main(int argc, char* argv[])
 {
 	fd_set readfd;
 	char buf[100];
-	char usr[10];
+	char *buff;
+	char usr[10],key[16];
 	char addrstr[INET_ADDRSTRLEN];
 	int sd, fd=1,wfd, newsd, rfd, sret;
 	ssize_t n;
@@ -121,12 +104,19 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "Incoming connection from %s:%d\n", addrstr, ntohs(sa.sin_port));
 		const int nfds=(int)newsd+1;
 		//write(atoi(argv[1]),newsd,sizeof(int));
-
+		printf("insert key:\n");
+		scanf("%s",key);
+		while(sizeof(key)!=16){
+			printf("please insert key again(16 characters)\n");
+			scanf("%s",key);
+		}
+		printf("key accepted!\n");
 	 	/* We break out of the loop when the remote peer goes away */
 	 	for (;;) {
 	 		FD_ZERO(&readfd);
 			FD_SET(newsd,&readfd);
 			FD_SET(fd,&readfd);
+			const char *temp;
 
 	 		sret=select(nfds,&readfd,NULL,NULL,NULL);
 	 		if(sret<0){
@@ -136,14 +126,20 @@ int main(int argc, char* argv[])
 				if(FD_ISSET(fd,&readfd)){
 					rfd=fd;
 					wfd=newsd;
-					strncpy(usr, EMPTY, sizeof(usr));	
+					n = read(rfd, buf, sizeof(buf));
+					strncpy(usr, EMPTY, sizeof(usr));
+					buff=encrypt(temp,sizeof(buf),key);	
+					temp=buff;
 				}
 				else {
 					rfd=newsd;
 					wfd=1;
+					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, CLIENT, sizeof(usr));
+					buff=decrypt(temp,sizeof(buf),key);
+					temp=buff;
 				}
-				n = read(rfd, buf, sizeof(buf));
+				
 				if (n < 0) {
 					perror("read from remote peer failed");
 					exit(1);
@@ -153,7 +149,7 @@ int main(int argc, char* argv[])
 					break;
 				}
 				insist_write(1, usr, sizeof(usr));
-				if (insist_write(wfd, buf, n) != n) {
+				if (insist_write(wfd, buff, n) != n) {
 					perror("write to remote peer failed");
 					exit(1);
 				}
