@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 {
 	int sd, port;
 	ssize_t n,sret;
-	char buf[100],usr[10],*buff;
+	char buf[100],usr[10],*temp_buf;
 	char *hostname;
 	struct hostent *hp;
 	struct sockaddr_in sa;
@@ -91,12 +91,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Connected.\n");
 	const int nfds=(int)sd+1;
 
-	/* Be careful with buffer overruns, ensure NUL-termination */
-
-	// if (shutdown(sd, SHUT_WR) < 0) {
-	// 	perror("shutdown");
-	// 	exit(1);
-	// }
+	/* Be careful with bufer overruns, ensure NUL-termination */
 
 	for(;;){
 		FD_ZERO(&readfd);
@@ -104,7 +99,6 @@ int main(int argc, char *argv[])
 		FD_SET(fd,&readfd);
 		/*check if someone has writen to the socket or to stdin*/
 		sret=select(nfds,&readfd,NULL,NULL,NULL);
-		const char *temp;
 		if(sret<0){
 			perror("select");
 			break;
@@ -115,28 +109,48 @@ int main(int argc, char *argv[])
 				wfd=1;
 				strncpy(usr, SERVER, sizeof(usr));
 				n=read(rfd,buf,sizeof(buf));
-				temp=buf;
+				// temp=buf;
 				if(n<=0){
 					printf("connection to peer lost\n");
 					break;
 				}
-				buff=decrypt(temp,sizeof(buf),key);
+				temp_buf=decrypt(buf,sizeof(buf),key);
+				printf("encrypted:\n");
+					if (insist_write(wfd, buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
+					printf("decrypted:\n");
+					if (insist_write(wfd, temp_buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
 			}
 			if(FD_ISSET(fd,&readfd)){
 				rfd=fd;
 				wfd=sd;
 				strncpy(usr, EMPTY, sizeof(usr));
 				n=read(rfd,buf,sizeof(buf));
-				temp=buf;
+				// temp=buf;
 				if(n<=0){
 					perror("read");
 					continue;
 				}
-				buff=encrypt(temp,sizeof(buf),key);
+				temp_buf=encrypt(buf,sizeof(buf),key);
+				printf("original:\n");
+					if (insist_write(wfd, buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
+					printf("encrypted:\n");
+					if (insist_write(wfd, temp_buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
 			}
 		}
 		insist_write(1, usr, sizeof(usr));
-		if (insist_write(wfd, buff, n) != n) {
+		if (insist_write(wfd, temp_buf, n) != n) {
 			perror("write to remote peer failed");
 			exit(1);
 		}

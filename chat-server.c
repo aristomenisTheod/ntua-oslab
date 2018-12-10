@@ -19,7 +19,7 @@
 #define KEY_SIZE 16  /* AES128 */
 #define BLOCK_SIZE 16
 
-/* Convert a buffer to upercase */
+/* Convert a temp_bufer to upercase */
 
 void toupper_buf(char *buf, size_t n)
 {
@@ -50,8 +50,7 @@ ssize_t insist_write(int fd, const void *buf, size_t cnt)
 int main(int argc, char* argv[])
 {
 	fd_set readfd;
-	char buf[100];
-	char *buff;
+	char buf[100],*temp_buf;
 	char usr[10],key[16];
 	char addrstr[INET_ADDRSTRLEN];
 	int sd, fd=1,wfd, newsd, rfd, sret;
@@ -116,7 +115,7 @@ int main(int argc, char* argv[])
 	 		FD_ZERO(&readfd);
 			FD_SET(newsd,&readfd);
 			FD_SET(fd,&readfd);
-			const char *temp;
+			// const char *temp;
 
 	 		sret=select(nfds,&readfd,NULL,NULL,NULL);
 	 		if(sret<0){
@@ -128,16 +127,34 @@ int main(int argc, char* argv[])
 					wfd=newsd;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, EMPTY, sizeof(usr));
-					buff=encrypt(temp,sizeof(buf),key);	
-					temp=buff;
+					temp_buf=encrypt(buf,sizeof(buf),key);
+					printf("original:\n");
+					if (insist_write(wfd, buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
+					printf("encrypted:\n");
+					if (insist_write(wfd, temp_buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}	
 				}
 				else {
 					rfd=newsd;
 					wfd=1;
 					n = read(rfd, buf, sizeof(buf));
 					strncpy(usr, CLIENT, sizeof(usr));
-					buff=decrypt(temp,sizeof(buf),key);
-					temp=buff;
+					temp_buf=decrypt(buf,sizeof(buf),key);
+					printf("encrypted:\n");
+					if (insist_write(wfd, buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
+					printf("decrypted:\n");
+					if (insist_write(wfd, temp_buf, n) != n) {
+						perror("write to remote peer failed");
+						exit(1);
+					}
 				}
 				
 				if (n < 0) {
@@ -148,11 +165,11 @@ int main(int argc, char* argv[])
 					printf("lost connection to peer\n");
 					break;
 				}
-				insist_write(1, usr, sizeof(usr));
-				if (insist_write(wfd, buff, n) != n) {
-					perror("write to remote peer failed");
-					exit(1);
-				}
+				// insist_write(1, usr, sizeof(usr));
+				// if (insist_write(wfd, temp_buf, n) != n) {
+				// 	perror("write to remote peer failed");
+				// 	exit(1);
+				// }
 			}
 	 	}
 		/* Make sure we don't leak open files */
