@@ -15,18 +15,21 @@ CFLAGS += -g
 
 LIBS = 
 
-BINS= chat-server chat-client crypt-func.o
+BINS= chat-server chat-client chat-client-crypto chat-server-crypto
 
 all: $(BINS)
 
-crypt-func.o: crypto-func.c chat-common.h
-	$(CC) $(CFLAGS) -c -o $@ $< $(LIBS)
+chat-server: chat-server.c chat-common.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-chat-server: chat-server.c chat-common.h crypt-func.o
-	$(CC) $(CFLAGS) -o $@ $< crypt-func.o $(LIBS)
+chat-client: chat-client.c chat-common.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-chat-client: chat-client.c chat-common.h crypt-func.o
-	$(CC) $(CFLAGS) -o $@ $< crypt-func.o $(LIBS)
+chat-server-crypto: chat-server-crypto.c chat-common.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+
+chat-client-crypto: chat-client-crypto.c chat-common.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 clean:
 	rm -f *.o *~ $(BINS)
