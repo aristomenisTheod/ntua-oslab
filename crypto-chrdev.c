@@ -122,6 +122,7 @@ static int crypto_chrdev_open(struct inode *inode, struct file *filp)
 	while (virtqueue_get_buf(vq, &len) == NULL)
 		/* do nothing */;
 	spin_unlock_irq(&crdev->lock);
+	crof->host_fd=*host_fd;
 
 	/* If host failed to open() return -ENODEV. */
 	if(host_fd<0){
@@ -181,13 +182,13 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
                                 unsigned long arg)
 {
 	long ret = 0;
-	int err;
+	int err,host_fd;
 	__u32 *id_user_arg,id_arg;
 	struct crypto_open_file *crof = filp->private_data;
 	struct crypto_device *crdev = crof->crdev;
 	struct virtqueue *vq = crdev->vq;
 	struct scatterlist syscall_type_sg, syscall_cmd_sg, output_msg_sg,dst_sg,
-			input_msg_sg,sess_sg,cryp_sg,ret_sg,*sgs[7];
+			input_msg_sg,sess_sg,cryp_sg,ret_sg,host_fd_sg,*sgs[7];
 	unsigned int num_out, num_in, len,host_ret;
 	unsigned char *output_msg, *input_msg ,*cryp_dst,*dst;
 	unsigned int *syscall_type;
@@ -203,6 +204,7 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	*syscall_type = VIRTIO_CRYPTODEV_SYSCALL_IOCTL;
 	output_msg = kzalloc(MSG_LEN, GFP_KERNEL);
 	input_msg = kzalloc(MSG_LEN, GFP_KERNEL);
+	host_fd=crof->host_fd;
 
 	num_out = 0;
 	num_in = 0;
@@ -231,6 +233,8 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 		sess_user_arg = (struct session_op*)arg;	/*get argument from syscall type session_op ptr*/
 		ret=copy_from_user(&sess_arg,sess_user_arg,sizeof(struct session_op));
 		if(ret) return -EFAULT;
+		sg_init_one(&host_fd_sg,&host_fd,sizeof(int));
+		sgs[num_out++]=&host_fd_sg;
 		sg_init_one(&sess_sg, &sess_arg, sizeof(struct session_op));
 		sgs[num_out+num_in++]=&sess_sg;	/*returns new session ptr*/
 	
@@ -243,19 +247,23 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 		if(ret) return -EFAULT;
 		sg_init_one(&sess_sg, &id_arg, sizeof(__u32));
 		sgs[num_out++]=&sess_sg;
+		sg_init_one(&host_fd_sg,&host_fd,sizeof(int));
+		sgs[num_out++]=&host_fd_sg;
 		
 		break;
 
 	case CIOCCRYPT:
 		debug("CIOCCRYPT");
 		cryp_user_arg = (struct crypt_op*)arg;	 /*get argument from syscall type crypt_op*/
-		ret=copy_from_user(&cryp_arg,cryp_user_arg,sizeof(struct cryp_op));
+		ret=copy_from_user(&cryp_arg,cryp_user_arg,sizeof(struct crypt_op));
 		if(ret) return -EFAULT;
 		sg_init_one(&cryp_sg, &cryp_arg, sizeof(struct crypt_op));
 		sgs[num_out++]=&cryp_sg;
+		sg_init_one(&host_fd_sg,&host_fd,sizeof(int));
+		sgs[num_out++]=&host_fd_sg;
 		cryp_dst=kzalloc(cryp_arg.len*sizeof(unsigned char),GFP_KERNEL);
 		dst=kzalloc(cryp_arg.len*sizeof(unsigned char),GFP_KERNEL);
-		cryp_dst=cryp_arg->dst;
+		cryp_dst=cryp_arg.dst;
 		ret=copy_from_user(dst,cryp_dst,cryp_arg.len*sizeof(unsigned char));
 		if(ret) return -EFAULT;
 		sg_init_one(&dst_sg,dst,cryp_arg.len*sizeof(unsigned char));
@@ -275,7 +283,7 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	 **/
 	/* ?? */
 	/* ?? Lock ?? */
-	spin_lock_irq(crdev->lock);
+	spin_lock_irq(&crdev->lock);
 	err = virtqueue_add_sgs(vq, sgs, num_out, num_in,
 	                        &syscall_type_sg, GFP_ATOMIC);
 	virtqueue_kick(vq);
@@ -290,7 +298,7 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 			ret=copy_to_user(cryp_user_arg->dst,dst,cryp_arg.len*sizeof(unsigned char));
 			if(ret) return -EFAULT;
 	}
-	spin_unlock_irq(crdev->lock);
+	spin_unlock_irq(&crdev->lock);
 	ret=host_ret;
 	if(ret)
 		debug("ioctl failed");
