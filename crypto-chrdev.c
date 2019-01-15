@@ -191,7 +191,7 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 {
 	long ret = 0;
 	int err,host_fd;
-	__u32 *id_user_arg,id_arg;
+	__u32 *id_user_arg,*id_arg;
 	struct crypto_open_file *crof = filp->private_data;
 	struct crypto_device *crdev = crof->crdev;
 	struct virtqueue *vq = crdev->vq;
@@ -216,9 +216,13 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	num_in = 0;
 	sess_arg=kzalloc(sizeof(struct session_op*),GFP_KERNEL);
 	cryp_arg=kzalloc(sizeof(struct crypt_op*),GFP_KERNEL);
+	cryp_user_arg=kzalloc(sizeof(struct crypt_op*),GFP_KERNEL);
 	id_arg=kzalloc(sizeof(__u32*),GFP_KERNEL);
+	id_user_arg=kzalloc(sizeof(__u32*),GFP_KERNEL);
+	src=NULL;
 	dst=NULL;
 	key=NULL;
+	iv=NULL;
 	/**
 	 *  These are common to all ioctl commands.
 	 **/
@@ -235,17 +239,17 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	case CIOCGSESSION:
 		debug("CIOCGSESSION");
 		// memcpy(output_msg, "Hello HOST from ioctl CIOCGSESSION.", 36);
-		input_msg[0] = '\0';
+		// input_msg[0] = '\0';
 		sess_user_arg = (struct session_op*)arg;	/*get argument from syscall type session_op ptr*/
 		ret=copy_from_user(sess_arg,sess_user_arg,sizeof(struct session_op));
 		if(ret) return -EFAULT;
-		ret=copy_from_user(key,sess_user_arg->key,sizeof(unsigned char*)*sess_arg.keylen);
+		ret=copy_from_user(key,sess_user_arg->key,sizeof(unsigned char*)*sess_arg->keylen);
 		if(ret) return -EFAULT;
 		sg_init_one(&host_fd_sg,&host_fd,sizeof(int));
 		sgs[num_out++]=&host_fd_sg;
-		key=kzalloc(sizeof(unsigned char)*sess_arg.keylen,GFP_KERNEL);
-		key=sess_arg.key;
-		sg_init_one(&key_sg,key,sess_arg.keylen*sizeof(unsigned char));
+		key=kzalloc(sizeof(unsigned char)*sess_arg->keylen,GFP_KERNEL);
+		key=sess_arg->key;
+		sg_init_one(&key_sg,key,sess_arg->keylen*sizeof(unsigned char));
 		sgs[num_out++]=&key_sg;
 		sg_init_one(&sess_sg, sess_arg, sizeof(struct session_op));
 		sgs[num_out+num_in++]=&sess_sg;	/*returns new session ptr*/
@@ -255,9 +259,9 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	case CIOCFSESSION:
 		debug("CIOCFSESSION");
 		id_user_arg = (__u32*)arg;	/*CIOCFSESSION has argument the sess_id*/
-		ret=copy_from_user(&id_arg,id_user_arg,sizeof(__u32));
+		ret=copy_from_user(id_arg,id_user_arg,sizeof(__u32));
 		if(ret) return -EFAULT;
-		sg_init_one(&sess_sg, &id_arg, sizeof(__u32));
+		sg_init_one(&sess_sg, id_arg, sizeof(__u32));
 		sgs[num_out++]=&sess_sg;
 		sg_init_one(&host_fd_sg,&host_fd,sizeof(int));
 		sgs[num_out++]=&host_fd_sg;
@@ -275,16 +279,16 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 		sgs[num_out++]=&host_fd_sg;
 		src=kzalloc(cryp_arg->len*sizeof(unsigned char),GFP_KERNEL);
 		src=cryp_arg->src;
-		sg_init_one(&src_sg,src,cryp_arg.len*sizeof(unsigned char));
+		sg_init_one(&src_sg,src,cryp_arg->len*sizeof(unsigned char));
 		sgs[num_out++]=&src_sg;
 		dst=kzalloc(cryp_arg->len*sizeof(unsigned char),GFP_KERNEL);
-		ret=copy_from_user(dst,cryp_arg->dst,cryp_arg.len*sizeof(unsigned char));
+		ret=copy_from_user(dst,cryp_arg->dst,cryp_arg->len*sizeof(unsigned char));
 		if(ret) return -EFAULT;
-		sg_init_one(&dst_sg,dst,cryp_arg.len*sizeof(unsigned char));
+		sg_init_one(&dst_sg,dst,cryp_arg->len*sizeof(unsigned char));
 		sgs[num_out+num_in++]=&dst_sg;
 		iv=kzalloc(cryp_arg->len*sizeof(unsigned char),GFP_KERNEL);
-		iv=cryp_arg.iv;
-		sg_init_one(&iv_sg,iv,cryp_arg.len*sizeof(unsigned char));
+		iv=cryp_arg->iv;
+		sg_init_one(&iv_sg,iv,cryp_arg->len*sizeof(unsigned char));
 		sgs[num_out+num_in++]=&iv_sg;
 		break;
 
@@ -315,8 +319,8 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 		case CIOCFSESSION:
 			kfree(id_arg);
 		case CIOCCRYPT:
-			ret=copy_to_user(cryp_user_arg->dst,dst,cryp_arg.len*sizeof(unsigned char));
-			kfree(crup_arg);
+			ret=copy_to_user(cryp_user_arg->dst,dst,cryp_arg->len*sizeof(unsigned char));
+			kfree(cryp_arg);
 			kfree(src);
 			kfree(dst);
 			kfree(iv);
@@ -326,7 +330,7 @@ static long crypto_chrdev_ioctl(struct file *filp, unsigned int cmd,
 	ret=host_ret;
 	if(ret<0)
 		debug("ioctl failed");
-	
+
 	kfree(syscall_type);
 	debug("Leaving");
 
