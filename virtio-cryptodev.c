@@ -54,10 +54,11 @@ static void vser_reset(VirtIODevice *vdev)
 static void vq_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtQueueElement *elem;
-    unsigned int *cmd, *host_ret, *syscall_type;
-    struct session_op sess;
-    struct crypt_op cryp;
-    int *host_fd;
+    unsigned int *cmd,  *syscall_type;
+    struct session_op *sess;
+    uint32_t *sess_id;
+    struct crypt_op *cryp;
+    int *host_ret,*host_fd;
     DEBUG_IN();
 
     elem = virtqueue_pop(vq, sizeof(VirtQueueElement));
@@ -73,8 +74,9 @@ static void vq_handle_output(VirtIODevice *vdev, VirtQueue *vq)
     case VIRTIO_CRYPTODEV_SYSCALL_TYPE_OPEN:
         DEBUG("VIRTIO_CRYPTODEV_SYSCALL_TYPE_OPEN");
         /* My code */
-        host_fd = elem->in_sg[0].iov_base;
+        host_fd = (int*)elem->in_sg[1].iov_base;
         *host_fd = open("/dev/crypto", O_RDWR);
+        printf("hello from backend!\n");
         if (*host_fd < 0) {
             perror("open(/dev/crypto)");
             // return NULL;
@@ -85,7 +87,8 @@ static void vq_handle_output(VirtIODevice *vdev, VirtQueue *vq)
     case VIRTIO_CRYPTODEV_SYSCALL_TYPE_CLOSE:
         DEBUG("VIRTIO_CRYPTODEV_SYSCALL_TYPE_CLOSE");
         /* My code */
-        host_fd = elem->in_sg[0].iov_base;
+        host_fd = (int*)elem->in_sg[0].iov_base;
+        printf("hello in close!!\n");
         if(close(*host_fd) < 0){
             perror("close");
         }
@@ -93,6 +96,7 @@ static void vq_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 
     case VIRTIO_CRYPTODEV_SYSCALL_TYPE_IOCTL:
         DEBUG("VIRTIO_CRYPTODEV_SYSCALL_TYPE_IOCTL");
+        printf("hello in IOCTL!!\n");
         /* My code */
         // unsigned char *output_msg = elem->out_sg[1].iov_base;
         // unsigned char *input_msg = elem->in_sg[0].iov_base;
@@ -100,36 +104,45 @@ static void vq_handle_output(VirtIODevice *vdev, VirtQueue *vq)
         // printf("Guest says: %s\n", output_msg);
         // printf("We say: %s\n", input_msg);
         cmd = elem->out_sg[1].iov_base;
-        switch(cmd){
+        switch(*cmd){
         case CIOCGSESSION:
-            sess = elem->in_sg[0].iov_base;
-            host_ret = elem->in_sg[1].iov_base;
-            if(ioctl(*host_fd, CIOCGSESSION, sess);){
+            sess = (struct session_op*)elem->in_sg[0].iov_base;
+            host_ret = (int*)elem->in_sg[1].iov_base;
+            host_fd=(int*)elem->out_sg[2].iov_base;
+            sess->key=(unsigned char*)elem->out_sg[3].iov_base;
+            if(ioctl(*host_fd, CIOCGSESSION, sess)){
                 perror("ioctl(CIOCGSESSION)");
-                host_ret = -1;
+                *host_ret = -1;
                 break;
             }
-            host_ret = 0;
+            *host_ret = 0;
             break;
         case CIOCFSESSION:
-            uint32_t sess_id = elem->in_sg[0].iov_base;
-            host_ret = elem->in_sg[1].iov_base;
-            if(ioctl(*host_fd, CIOCFSESSION, sess_id);){
+            sess_id = (uint32_t*)elem->out_sg[2].iov_base;
+            host_ret = (int*)elem->in_sg[0].iov_base;
+            host_fd=(int*)elem->out_sg[3].iov_base;
+            if(ioctl(*host_fd, CIOCFSESSION, sess_id)){
                 perror("ioctl(CIOCFSESSION)");
-                host_ret = -1;
+                *host_ret = -1;
                 break;
             }
-            host_ret = 0;
+            *host_ret = 0;
             break;
 
         case CIOCCRYPT:
-            crypt_op = elem->in_sg[0].iov_base;
-            crypt_op.dst = elem->in_sg[1].iov_base;
-            if (ioctl(cfd, CIOCCRYPT, &cryp)) {
+            cryp = (struct crypt_op*)elem->out_sg[2].iov_base;
+            cryp->dst = (unsigned char*)elem->in_sg[0].iov_base;
+            host_fd=(int*)elem->out_sg[3].iov_base;
+            cryp->src=(unsigned char*)elem->out_sg[4].iov_base;
+            cryp->iv=(unsigned char*)elem->in_sg[1].iov_base;
+            host_ret=(int*)elem->in_sg[2].iov_base;
+            if (ioctl(*host_fd, CIOCCRYPT, cryp)) {
                 perror("ioctl(CIOCCRYPT)");
+                *host_ret=-1;
             }
+            *host_ret=0;
             break;
-
+        }
     default:
         DEBUG("Unknown syscall_type");
         break;
